@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Auto MCQs Generator — Complete</title>
+
+  <!-- Libraries (CDN) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+  <script src="https://unpkg.com/mammoth/mammoth.browser.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.2.1/dist/tesseract.min.js"></script>
+
+  <style>
+    :root{
+      --bg:#0f1724; --card:#0b1220; --accent1:#7c3aed; --accent2:#06b6d4;
+      --glass: rgba(255,255,255,0.04);
+      --muted: #94a3b8; --text:#e6eef8;
+      --light-bg: #f6f8fb; --light-card:#ffffff; --light-text:#0b1220; --light-muted:#4b5563;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+
+    /* Page */
+    body{
+      margin:0;
+      background: linear-gradient(160deg,#041025 0%, #071029 40%, #041224 100%);
+      color:var(--text);
+      padding:0;
+      transition:background .25s,color .25s;
+    }
+
+    /* Header / Purpose */
+    header{
+      text-align:center;
+      padding:26px 16px;
+      background: linear-gradient(90deg,var(--accent1),var(--accent2));
+      color:white;
+    }
+    header h1{margin:0; font-size:24px;}
+    header p{max-width:820px; margin:10px auto; font-size:15px; line-height:1.6;}
+    .icons{display:flex; justify-content:center; gap:18px; margin-top:12px; flex-wrap:wrap;}
+    .icons img{width:64px; height:64px; border-radius:10px; background:#fff; padding:8px;}
+
+    /* Layout */
+    .wrap{width:100%; max-width:1200px; margin:24px auto; display:grid; grid-template-columns: 440px 1fr; gap:18px; padding:12px;}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent); border-radius:12px; padding:16px; box-shadow: 0 8px 30px rgba(2,6,23,0.6); border:1px solid rgba(255,255,255,0.03);}
+    h2{font-size:18px; margin:0 0 8px 0}
+    p.lead{margin:0 0 12px 0; color:var(--muted); font-size:13px}
+
+    /* Controls */
+    .filebox{display:flex; flex-direction:column; gap:10px}
+    select, input[type="number"], .btn, textarea{width:100%}
+    select, input[type="number"], textarea{padding:10px; border-radius:8px; background:var(--glass); border:1px solid rgba(255,255,255,0.03); color:var(--text)}
+    .controls{display:flex; gap:8px; margin-top:8px}
+    .btn{display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:10px 12px; border-radius:10px; cursor:pointer;
+         background:linear-gradient(90deg,var(--accent1),var(--accent2)); color:white; font-weight:600; border:none; box-shadow: 0 6px 18px rgba(12,8,30,0.6); transition:transform .12s}
+    .btn:active{transform:translateY(2px) scale(.997)}
+    textarea{min-height:120px; resize:vertical}
+
+    /* Result */
+    .result{overflow:auto; padding:12px; max-height:72vh}
+    .mcq{background: linear-gradient(180deg, rgba(255,255,255,0.01), transparent); border-radius:8px; padding:10px; margin-bottom:10px; border:1px solid rgba(255,255,255,0.02)}
+    .opt{display:flex; gap:10px; padding:6px 8px; border-radius:8px; align-items:center}
+    .badge{font-size:12px; padding:6px 8px; border-radius:999px; background:rgba(255,255,255,0.03); color:var(--muted)}
+    .answer { margin-top:8px; font-weight:600; color:#bde0fe; }
+    .explain { font-size:13px; color:var(--muted); margin-top:6px; }
+
+    /* Topbar */
+    .topbar{display:flex; justify-content:space-between; gap:12px; align-items:center; margin-bottom:12px}
+    .small{font-size:13px; color:var(--muted)}
+    .animate-gradient{background:linear-gradient(90deg,#7c3aed,#06b6d4); -webkit-background-clip:text; background-clip:text; color:transparent; animation:slide 3s linear infinite}
+    @keyframes slide{0%{background-position:0%}100%{background-position:100%}}
+    .footer{font-size:13px; color:var(--muted); margin-top:10px}
+    .hint{font-size:12px; color:#ffd166; margin-top:6px}
+    .flex-row{display:flex; gap:8px; align-items:center}
+    .chip{font-size:12px; padding:6px 8px; border-radius:8px; background:rgba(255,255,255,0.02)}
+    .logo{display:flex; gap:10px; align-items:center}
+    .logo-dot{width:36px;height:36px;border-radius:8px;background:linear-gradient(180deg,var(--accent1),var(--accent2));display:flex;align-items:center;justify-content:center;font-weight:700;color:white}
+    .save-btn{background:transparent;border:1px solid rgba(255,255,255,0.06); padding:8px 10px; border-radius:8px; color:var(--text); cursor:pointer}
+    .muted{color:var(--muted)}
+    .row{display:flex;gap:8px}
+
+    /* Theme toggle */
+    .toggle{display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+    .switch{width:46px;height:26px;border-radius:20px;background:rgba(255,255,255,0.08);display:inline-flex;padding:3px;align-items:center;position:relative;transition:background .2s}
+    .knob{width:20px;height:20px;border-radius:50%;background:white;transform:translateX(0);transition:transform .25s, background .25s}
+    .light-theme .knob{background:#0b1220;transform:translateX(20px)}
+    .light-theme body{background:var(--light-bg)!important;color:var(--light-text)!important}
+    .light-theme .card{background:var(--light-card)!important;color:var(--light-text)!important}
+    .light-theme header{color:var(--light-text)!important}
+    @media (max-width:980px){.wrap{grid-template-columns:1fr; padding-bottom:80px}}
+  </style>
+</head>
+<body>
+
+  <!-- Purpose Section -->
+  <header>
+    <h1>🎯 Auto MCQs Generator</h1>
+    <p>
+      This tool automatically generates multiple-choice questions from your study material — great for students and teachers.
+      Upload PDF, DOCX, PPTX, TXT or Images (OCR) and generate up to 100 MCQs with correct answers and short explanations.
+    </p>
+    <div class="icons">
+      <img src="https://cdn-icons-png.flaticon.com/512/3135/3135768.png" alt="Student">
+      <img src="https://cdn-icons-png.flaticon.com/512/2857/2857430.png" alt="Questions">
+      <img src="https://cdn-icons-png.flaticon.com/512/3135/3135810.png" alt="Teacher">
+    </div>
+  </header>
+
+  <div class="wrap">
+    <!-- Left panel -->
+    <div class="card">
+      <div class="logo">
+        <div class="logo-dot">MC</div>
+        <div>
+          <h2>Upload & Generate</h2>
+          <p class="lead">Upload file or paste text — choose difficulty & number of questions.</p>
+        </div>
+      </div>
+
+      <div class="filebox">
+        <label class="small">Upload file (PDF | DOCX | PPTX | TXT | Images) or paste text below</label>
+        <input id="fileInput" type="file" accept=".pdf,.docx,.pptx,.txt,image/*" multiple />
+        <div style="text-align:center">— OR —</div>
+        <textarea id="textInput" placeholder="Paste text here (if you don't want to upload a file)"></textarea>
+
+        <div class="controls">
+          <select id="difficulty">
+            <option value="easy">Easy — Fill blanks</option>
+            <option value="normal" selected>Normal — Mixed</option>
+            <option value="hard">Hard — Inference</option>
+          </select>
+          <input id="numMCQs" type="number" min="1" max="100" value="5" title="1-100" />
+        </div>
+
+        <div class="controls" style="margin-top:12px">
+          <button class="btn" id="generateBtn">Generate MCQs</button>
+          <button class="save-btn" id="downloadBtn" style="display:none">Save to .txt</button>
+        </div>
+
+        <div class="row" style="margin-top:10px; align-items:center; justify-content:space-between">
+          <div class="small">Theme:</div>
+          <div class="toggle" id="themeToggle" title="Toggle light/dark">
+            <div class="switch"><div class="knob" id="knobElem"></div></div>
+            <div class="small" id="themeLabel">Dark</div>
+          </div>
+        </div>
+
+        <div class="hint">Tip: PPTX text extracted; Images use OCR (Tesseract). For scanned PDFs use images or paste text.</div>
+        <div class="footer">Runs client-side — files not uploaded to any server.</div>
+      </div>
+    </div>
+
+    <!-- Right panel -->
+    <div class="card">
+      <div class="topbar">
+        <div>
+          <div class="animate-gradient">Results</div>
+          <div class="small muted" id="summary">No MCQs generated yet.</div>
+        </div>
+        <div class="flex-row">
+          <div class="chip" id="statusChip">Ready</div>
+        </div>
+      </div>
+      <div class="result" id="resultArea">
+        <div class="muted">Generated MCQs will appear here.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- JS: extraction, OCR worker, MCQ algorithm, render & download -->
+  <script>
+    // ---- Helpers ----
+    const $ = id => document.getElementById(id);
+    const setStatus = t => { $('statusChip').textContent = t; };
+    const setSummary = t => { $('summary').textContent = t; };
+
+    // pdf.js worker
+    if(window.pdfjsLib && pdfjsLib.GlobalWorkerOptions){
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    }
+
+    // ---- Theme toggle ----
+    const themeToggle = $('themeToggle'), themeLabel = $('themeLabel');
+    if(localStorage.getItem("theme")==='light'){
+      document.documentElement.classList.add('light-theme');
+      themeLabel.textContent = 'Light';
+    }
+    themeToggle.addEventListener('click', ()=> {
+      document.documentElement.classList.toggle('light-theme');
+      if(document.documentElement.classList.contains('light-theme')){
+        themeLabel.textContent = 'Light';
+        localStorage.setItem('theme','light');
+      } else {
+        themeLabel.textContent = 'Dark';
+        localStorage.setItem('theme','dark');
+      }
+    });
+
+    // ---- OCR worker (lazy) ----
+    let ocrWorker = null;
+    async function ensureOCRWorker(){
+      if(ocrWorker) return ocrWorker;
+      if(!window.Tesseract || !Tesseract.createWorker) throw new Error('Tesseract not available');
+      const createWorker = Tesseract.createWorker;
+      ocrWorker = createWorker({
+        logger: m => {
+          if(m && m.status){
+            let p = '';
+            if(typeof m.progress === 'number') p = ` ${Math.round(m.progress*100)}%`;
+            setStatus(`OCR: ${m.status}${p}`);
+          }
+        }
+      });
+      await ocrWorker.load();
+      await ocrWorker.loadLanguage('eng');
+      await ocrWorker.initialize('eng');
+      return ocrWorker;
+    }
+
+    // ---- File extractors ----
+    async function extractPDF(file){
+      try{
+        setStatus('Extracting PDF...');
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
+        let fullText = "";
+        for(let i=1;i<=pdf.numPages;i++){
+          const page = await pdf.getPage(i);
+          const txt = await page.getTextContent();
+          const pageText = txt.items.map(it=>it.str).join(' ');
+          if(pageText && pageText.trim()) fullText += pageText + " ";
+        }
+        return fullText;
+      } catch(e){
+        console.warn('PDF extract error', e);
+        return '';
+      }
+    }
+
+    async function extractDOCX(file){
+      try{
+        setStatus('Extracting DOCX...');
+        const arrayBuffer = await file.arrayBuffer();
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        return result.value || '';
+      } catch(e){
+        console.warn('DOCX error', e);
+        return '';
+      }
+    }
+
+    async function extractPPTX(file){
+      try{
+        setStatus('Extracting PPTX...');
+        const zip = await JSZip.loadAsync(file);
+        const slideFiles = [];
+        zip.forEach((relativePath) => {
+          if(/^ppt\/slides\/slide\d+\.xml$/i.test(relativePath)) slideFiles.push(relativePath);
+        });
+        slideFiles.sort((a,b)=>{
+          const na = parseInt((a.match(/slide(\d+)\.xml/i)||[])[1]||0);
+          const nb = parseInt((b.match(/slide(\d+)\.xml/i)||[])[1]||0);
+          return na-nb;
+        });
+        let text = '';
+        for(const path of slideFiles){
+          const content = await zip.file(path).async('string');
+          const matches = [...content.matchAll(/<a:t[^>]*>(.*?)<\/a:t>/gms)].map(m=>m[1]);
+          if(matches.length) text += matches.join(' ') + ' ';
+        }
+        // notes (optional)
+        const notesFiles = [];
+        zip.forEach((relativePath)=> {
+          if(/^ppt\/notesSlides\/notesSlide\d+\.xml$/i.test(relativePath)) notesFiles.push(relativePath);
+        });
+        for(const p of notesFiles){
+          const c = await zip.file(p).async('string');
+          const mm = [...c.matchAll(/<a:t[^>]*>(.*?)<\/a:t>/gms)].map(m=>m[1]);
+          if(mm.length) text += mm.join(' ') + ' ';
+        }
+        return text;
+      } catch(e){
+        console.warn('PPTX extract error', e);
+        return '';
+      }
+    }
+
+    async function extractImageText(file){
+      try{
+        setStatus('Initializing OCR...');
+        const worker = await ensureOCRWorker();
+        const { data: { text } } = await worker.recognize(file);
+        return text || '';
+      } catch(e){
+        console.warn('OCR error', e);
+        return '';
+      }
+    }
+
+    // ---- Text cleaning & algorithm ----
+    function cleanText(text){
+      if(!text) return '';
+      text = text.normalize('NFKD').replace(/[^\x00-\x7F]/g, '');
+      text = text.replace(/\s+/g,' ').trim();
+      text = text.replace(/[^\w\s.,!?;:-]/g,'');
+      return text;
+    }
+
+    function getSentences(text, difficulty){
+      if(!text) return [];
+      const settings = {easy:4, normal:5, hard:6};
+      const minWords = settings[difficulty] || 5;
+      let raw = text.split(/[.!?]+/g).map(s=>s.trim()).filter(Boolean);
+      let sentences = [];
+      raw.forEach(s=>{
+        const words = s.split(/\s+/).filter(Boolean);
+        const wordCount = words.filter(w=>/^[a-zA-Z]/.test(w)).length;
+        if(wordCount >= Math.max(2, minWords-2) && words.length <= 120) sentences.push(s);
+        if((s.includes(',')||s.includes(';')) && words.length>minWords+2){
+          s.split(/[,;]+/).map(p=>p.trim()).forEach(p=>{
+            if(p.split(/\s+/).length >= minWords) sentences.push(p);
+          });
+        }
+      });
+      const seen = new Set(); return sentences.filter(s=>{ const k=s.toLowerCase(); if(seen.has(k)) return false; seen.add(k); return true; });
+    }
+
+    function getKeywords(text, difficulty){
+      if(!text) return [];
+      const stopwords = new Set([
+        'i','me','my','myself','we','our','ours','ourselves','you','your','yours','yourself','yourselves',
+        'he','him','his','himself','she','her','hers','herself','it','its','itself','they','them','their',
+        'what','which','who','whom','this','that','these','those','am','is','are','was','were','be','been',
+        'being','have','has','had','do','does','did','a','an','the','and','but','if','or','because','as',
+        'until','while','of','at','by','for','with','about','against','between','into','through','during',
+        'before','after','above','below','to','from','up','down','in','out','on','off','over','under','again',
+        'further','then','once','here','there','when','where','why','how','all','any','both','each','few','more',
+        'most','other','some','such','no','nor','not','only','own','same','so','than','too','very','can','will',
+        'just','should','now','also','could','would','may','might','must','shall'
+      ]);
+      const words = (text.toLowerCase().match(/\b[a-z]{3,}\b/g) || []);
+      const filt = words.filter(w=>!stopwords.has(w));
+      const freq = {};
+      filt.forEach(w=> freq[w]=(freq[w]||0)+1);
+      const items = Object.entries(freq).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
+      const keywords = items.slice(0,200);
+      if(keywords.length < 50){
+        const uniq = Array.from(new Set(filt));
+        uniq.forEach(u=>{ if(!keywords.includes(u)) keywords.push(u); });
+      }
+      return keywords;
+    }
+
+    function generateDistractors(correct, keywords, difficulty, sentenceWords){
+      if(!keywords || keywords.length===0){
+        return ["Alternative","Different","Another"];
+      }
+      const sim = difficulty==='easy' ? 'low' : (difficulty==='normal' ? 'medium' : 'high');
+      const correctLower = correct.toLowerCase().replace(/[^\w]/g,'');
+      let candidates = [];
+      if(sim === 'low'){
+        candidates = keywords.filter(w=>w!==correctLower);
+      } else if(sim === 'medium'){
+        candidates = keywords.filter(w=>w!==correctLower);
+      } else {
+        const sWords = sentenceWords.map(w=>w.replace(/[^\w]/g,'').toLowerCase());
+        candidates = keywords.filter(w=>{
+          if(w===correctLower) return false;
+          return Math.abs(w.length - correctLower.length) <= 3 || w[0]===correctLower[0] || sWords.includes(w);
+        });
+        if(candidates.length < 15) {
+          candidates = candidates.concat(keywords.filter(w=>w!==correctLower && !candidates.includes(w)));
+        }
+      }
+      for (let i=candidates.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [candidates[i],candidates[j]]=[candidates[j],candidates[i]]; }
+      const distractors = [];
+      const used = new Set();
+      for(const c of candidates){
+        if(distractors.length>=3) break;
+        if(used.has(c)) continue;
+        const formatted = c.replace(/\b\w/g, ch => ch.toUpperCase());
+        if(formatted.toLowerCase() !== correctLower && !distractors.includes(formatted)){
+          distractors.push(formatted); used.add(c);
+        }
+      }
+      const backup = ["Option","Choice","Answer","Solution","Result","Outcome"];
+      let bi=0;
+      while(distractors.length<3 && bi<backup.length){
+        distractors.push(`${backup[bi]}${distractors.length+1}`); bi++;
+      }
+      while(distractors.length<3) distractors.push(`Option${distractors.length+1}`);
+      return distractors.slice(0,3);
+    }
+
+    function createQuestionVariant(sentence, keyword, difficulty){
+      const types = {easy:['fill_blank'], normal:['fill_blank','direct'], hard:['fill_blank','concept','inference']};
+      const pool = types[difficulty] || types.normal;
+      const chosen = pool[Math.floor(Math.random()*pool.length)];
+      const cleanKeyword = keyword.replace(/[^\w.,!?;:]/g,'');
+      if(chosen==='fill_blank'){
+        const re = new RegExp('\\b'+keyword+'\\b','i');
+        const replaced = sentence.replace(re, '______');
+        return `Fill in the blank: ${replaced}`;
+      } else if(chosen==='direct'){
+        return `According to the text, which term best fits: "${sentence.slice(0,60)}..."?`;
+      } else if(chosen==='concept'){
+        return `Which concept is discussed in: "${sentence.slice(0,50)}..."?`;
+      } else if(chosen==='inference'){
+        return `In the context "${sentence.slice(0,50)}...", which term is most appropriate?`;
+      } else {
+        return `Complete the sentence: ${sentence.replace(keyword,'______')}`;
+      }
+    }
+
+    function generateMCQsFromText(fullText, num, difficulty){
+      const text = cleanText(fullText);
+      if(!text || text.split(/\s+/).length < 10) return { error: "Insufficient text content for MCQ generation" };
+      const sentences = getSentences(text, difficulty);
+      const keywords = getKeywords(text, difficulty);
+      if(sentences.length===0) return { error: "No suitable sentences found." };
+      if(keywords.length===0) return { error: "No keywords found in text." };
+
+      const mcqs = [];
+      const usedSentences = new Set();
+      const usedKeywords = new Set();
+      let passes = 1, maxPasses = 5;
+      while(mcqs.length < num && passes <= maxPasses){
+        const shuffled = sentences.slice().sort(()=>Math.random()-0.5);
+        for(const sentence of shuffled){
+          if(mcqs.length>=num) break;
+          if(passes===1 && usedSentences.has(sentence)) continue;
+          const words = sentence.split(/\s+/);
+          const candidates = [];
+          for(const w of words){
+            const clean = w.replace(/[^\w]/g,'').toLowerCase();
+            if(clean.length>=3 && keywords.includes(clean) && (passes>1 || !usedKeywords.has(clean))){
+              candidates.push(w);
+            }
+          }
+          for(const candidate of candidates){
+            if(mcqs.length>=num) break;
+            try{
+              const question = createQuestionVariant(sentence, candidate, difficulty);
+              const correct = candidate.replace(/[^\w.,!?;:]/g,'');
+              const distractors = generateDistractors(correct, keywords, difficulty, words);
+              if(distractors.length<3) continue;
+              const options = [correct].concat(distractors).sort(()=>Math.random()-0.5);
+              const answerIndex = options.findIndex(o => o.toLowerCase().replace(/[^\w]/g,'') === correct.toLowerCase().replace(/[^\w]/g,''));
+              const answer = answerIndex>=0 ? "ABCD"[answerIndex] : "A";
+              const explanation = `Correct: ${correct}.` + (difficulty==='easy' ? " (Look for contextual clues in the sentence.)" : "");
+              const optMap = {};
+              ["A","B","C","D"].forEach((k,i)=> optMap[k]= options[i] || `Option${i+1}`);
+              mcqs.push({question, options: optMap, correct_answer: answer, explanation, difficulty});
+              usedSentences.add(sentence); usedKeywords.add(candidate.replace(/[^\w]/g,'').toLowerCase());
+            } catch(e){
+              console.warn("Candidate error", e);
+            }
+          }
+        }
+        passes++;
+        if(mcqs.length < num*0.3 && passes <= maxPasses){
+          usedSentences.clear();
+          if(passes>3) usedKeywords.clear();
+        }
+      }
+      return { mcqs, sentencesCount: sentences.length, keywordsCount: keywords.length };
+    }
+
+    // ---- Render & Download ----
+    function renderMCQs(mcqs){
+      if(!mcqs || mcqs.length===0){
+        $('resultArea').innerHTML = `<div class="muted">No MCQs generated.</div>`;
+        return;
+      }
+      const frag = document.createDocumentFragment();
+      mcqs.forEach((m,i)=>{
+        const div = document.createElement('div'); div.className='mcq';
+        const qh = document.createElement('div'); qh.innerHTML = `<strong>Q${i+1}:</strong> ${m.question}`;
+        const opts = document.createElement('div'); opts.style.marginTop='8px';
+        ["A","B","C","D"].forEach(k=>{
+          const o = document.createElement('div'); o.className='opt';
+          const label = document.createElement('div'); label.style.width='26px'; label.style.fontWeight='700'; label.textContent = k;
+          const txt = document.createElement('div'); txt.textContent = m.options[k] || '';
+          o.appendChild(label); o.appendChild(txt); opts.appendChild(o);
+        });
+        const ans = document.createElement('div'); ans.className='answer'; ans.innerHTML = `✔ ${m.correct_answer}`;
+        const expl = document.createElement('div'); expl.className='explain'; expl.textContent = m.explanation || '';
+        div.appendChild(qh); div.appendChild(opts); div.appendChild(ans); div.appendChild(expl);
+        frag.appendChild(div);
+      });
+      $('resultArea').innerHTML = '';
+      $('resultArea').appendChild(frag);
+    }
+
+    function downloadAsTxt(mcqs){
+      if(!mcqs || mcqs.length===0) return;
+      const difficulty = (mcqs[0].difficulty || 'mixed').toUpperCase();
+      const lines = [];
+      lines.push("=".repeat(60));
+      lines.push(`MCQ GENERATOR - ${difficulty} MODE`);
+      lines.push(`Generated on: ${new Date().toISOString().replace('T',' ').slice(0,19)}`);
+      lines.push(`Total Questions: ${mcqs.length}`);
+      lines.push("=".repeat(60));
+      lines.push("");
+      mcqs.forEach((m,i)=>{
+        lines.push(`Q${i+1}: ${m.question}`);
+        lines.push("-".repeat(50));
+        ["A","B","C","D"].forEach(k=>{
+          lines.push(`   ${k}) ${m.options[k] || ''}`);
+        });
+        lines.push("");
+        lines.push(`✔️ Correct Answer: ${m.correct_answer}`);
+        lines.push(`💡 Explanation: ${m.explanation || ''}`);
+        lines.push("=".repeat(50));
+        lines.push("");
+      });
+      const blob = new Blob([lines.join('\n')], {type:'text/plain;charset=utf-8'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `mcqs_${difficulty.toLowerCase()}_${mcqs.length}q.txt`;
+      document.body.appendChild(a); a.click(); a.remove();
+    }
+
+    // ---- Main UI flow ----
+    $('generateBtn').addEventListener('click', async ()=>{
+      try{
+        setStatus('Processing...');
+        setSummary('Preparing extraction...');
+        $('downloadBtn').style.display = 'none';
+        $('resultArea').innerHTML = `<div class="muted">Working... please wait.</div>`;
+
+        const files = Array.from($('fileInput').files || []);
+        const pasted = $('textInput').value.trim();
+        let accumulatedText = '';
+
+        if(files.length){
+          for(const file of files){
+            const mime = (file.type||'').toLowerCase();
+            const name = (file.name||'').toLowerCase();
+            if(mime === 'application/pdf' || name.endsWith('.pdf')){
+              accumulatedText += await extractPDF(file) + ' ';
+            } else if(mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || name.endsWith('.docx')){
+              accumulatedText += await extractDOCX(file) + ' ';
+            } else if(name.endsWith('.pptx') || mime === 'application/vnd.openxmlformats-officedocument.presentationml.presentation'){
+              accumulatedText += await extractPPTX(file) + ' ';
+            } else if(mime.startsWith('image/') || /\.(png|jpe?g|bmp|gif|webp)$/i.test(name)){
+              accumulatedText += await extractImageText(file) + ' ';
+            } else if(name.endsWith('.txt') || mime === 'text/plain'){
+              accumulatedText += await file.text() + ' ';
+            } else {
+              // fallback
+              try{ accumulatedText += await file.text() + ' '; } catch(e){ console.warn('Skipped file', file.name); }
+            }
+          }
+        }
+
+        if(!accumulatedText && pasted) accumulatedText = pasted;
+        if(!accumulatedText){
+          setStatus('No content');
+          setSummary('Please upload a file or paste text.');
+          $('resultArea').innerHTML = `<div class="muted">Please upload a file (PDF/DOCX/PPTX/TXT/Images) or paste text in the box.</div>`;
+          return;
+        }
+
+        const difficulty = $('difficulty').value;
+        let num = parseInt($('numMCQs').value) || 5;
+        num = Math.min(100, Math.max(1, num));
+        setSummary(`Generating ${num} questions — difficulty: ${difficulty.toUpperCase()}`);
+
+        const out = generateMCQsFromText(accumulatedText, num, difficulty);
+
+        if(out.error){
+          setStatus('Failed');
+          setSummary(out.error);
+          $('resultArea').innerHTML = `<div class="muted">${out.error}</div>`;
+          return;
+        }
+
+        const mcqs = out.mcqs;
+        setStatus('Done');
+        setSummary(`Generated ${mcqs.length} MCQs • Sentences:${out.sentencesCount} • Keywords:${out.keywordsCount}`);
+        renderMCQs(mcqs);
+        $('downloadBtn').style.display = 'inline-block';
+        $('downloadBtn').onclick = ()=> downloadAsTxt(mcqs);
+
+      } catch(e){
+        console.error(e);
+        setStatus('Error');
+        setSummary('Unexpected error during processing.');
+        $('resultArea').innerHTML = `<div class="muted">Unexpected error: ${e && e.message ? e.message : e}</div>`;
+      }
+    });
+
+    // initial UI
+    setStatus('Ready');
+    setSummary('Upload files or paste text, choose difficulty & number, then Generate.');
+
+    // cleanup OCR worker on unload
+    window.addEventListener('beforeunload', async ()=> {
+      if(ocrWorker){
+        try{ await ocrWorker.terminate(); }catch(e){} ocrWorker = null;
+      }
+    });
+  </script>
+</body>
+</html>
