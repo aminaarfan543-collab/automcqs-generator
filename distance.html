@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pakistan Distance & Time Calculator</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f4f6f8; display: flex; }
+    header { background: #0f4c81; color: #fff; padding: 15px; text-align: center; width: 100%; }
+
+    main { flex: 1; }
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; padding: 15px; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .controls input, .controls select, .controls button {
+      padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; width: 220px;
+    }
+    .controls button { background: #0f4c81; color: #fff; cursor: pointer; }
+    #result { padding: 15px; font-size: 16px; }
+    #map { height: 70vh; width: 100%; }
+    .suggestions { border: 1px solid #ccc; background: #fff; position: absolute; z-index: 1000; max-height: 150px; overflow-y: auto; width: 220px; }
+    .suggestions div { padding: 6px; cursor: pointer; }
+    .suggestions div:hover { background: #eee; }
+
+    /* Sidebar Info Blocks */
+    .sidebar {
+      width: 320px;
+      background: #ffffff;
+      padding: 15px;
+      box-shadow: -2px 0 6px rgba(0,0,0,0.1);
+      overflow-y: auto;
+    }
+    .block {
+      background: #f1f9ff;
+      padding: 15px;
+      margin-bottom: 15px;
+      border-radius: 12px;
+      text-align: center;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+    }
+    .block img {
+      width: 60px;
+      margin-bottom: 10px;
+    }
+    .block h3 {
+      margin: 10px 0;
+      color: #0f4c81;
+    }
+    .block p {
+      font-size: 14px;
+      line-height: 1.5;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+  <div style="flex:1; display:flex; flex-direction:column;">
+    <header>
+      <h1>Pakistan Distance & Time Calculator</h1>
+    </header>
+
+    <main>
+      <div class="controls">
+        <div style="position:relative;">
+          <input id="from" type="text" placeholder="From (Pakistan Address)" autocomplete="off">
+          <div id="from-suggestions" class="suggestions"></div>
+        </div>
+        <div style="position:relative;">
+          <input id="to" type="text" placeholder="To (Pakistan Address)" autocomplete="off">
+          <div id="to-suggestions" class="suggestions"></div>
+        </div>
+        <select id="mode">
+          <option value="driving">Driving</option>
+          <option value="walking">Walking</option>
+          <option value="cycling">Cycling</option>
+        </select>
+        <button id="calc">Calculate</button>
+      </div>
+
+      <div id="result">Distance: - | Time: -</div>
+      <div id="map"></div>
+    </main>
+  </div>
+
+  <!-- Sidebar Blocks -->
+  <div class="sidebar">
+    <div class="block">
+      <img src="https://cdn-icons-png.flaticon.com/512/684/684908.png" alt="Intro">
+      <h3>Introduction</h3>
+      <p>
+        This tool helps you calculate distance and travel time between any two 
+        addresses in Pakistan. It supports <b>driving, walking,</b> and <b>cycling</b> modes.
+      </p>
+    </div>
+    <div class="block">
+      <img src="https://cdn-icons-png.flaticon.com/512/854/854878.png" alt="Advantage 1">
+      <h3>Easy to Use</h3>
+      <p>Just type your starting and ending location and get instant results.</p>
+    </div>
+    <div class="block">
+      <img src="https://cdn-icons-png.flaticon.com/512/535/535239.png" alt="Advantage 2">
+      <h3>Accurate Routes</h3>
+      <p>Using OpenStreetMap & OSRM routing for reliable and up-to-date results.</p>
+    </div>
+    <div class="block">
+      <img src="https://cdn-icons-png.flaticon.com/512/854/854894.png" alt="Advantage 3">
+      <h3>Multiple Modes</h3>
+      <p>Choose between driving, walking, or cycling to match your journey style.</p>
+    </div>
+    <div class="block">
+      <img src="https://cdn-icons-png.flaticon.com/512/272/272456.png" alt="Advantage 4">
+      <h3>Visual Map</h3>
+      <p>Interactive map with highlighted routes to help you plan your journey better.</p>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    let fromCoords = null, toCoords = null;
+
+    async function fetchSuggestions(query, boxId, setCoords) {
+      if (!query) { document.getElementById(boxId).innerHTML = ""; return; }
+      const url = `https://nominatim.openstreetmap.org/search?format=json&countrycodes=pk&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`;
+      const response = await fetch(url, { headers: { 'User-Agent': 'DistanceCalculatorApp/1.0' }});
+      const data = await response.json();
+      const box = document.getElementById(boxId);
+      box.innerHTML = "";
+      data.forEach(item => {
+        const div = document.createElement("div");
+        div.textContent = item.display_name;
+        div.onclick = () => {
+          document.getElementById(boxId.replace("-suggestions","")).value = item.display_name;
+          setCoords({lat: parseFloat(item.lat), lng: parseFloat(item.lon), name:item.display_name});
+          box.innerHTML = "";
+        };
+        box.appendChild(div);
+      });
+    }
+
+    document.getElementById("from").addEventListener("input", e => {
+      fetchSuggestions(e.target.value, "from-suggestions", coords => fromCoords = coords);
+    });
+    document.getElementById("to").addEventListener("input", e => {
+      fetchSuggestions(e.target.value, "to-suggestions", coords => toCoords = coords);
+    });
+
+    const map = L.map('map').setView([30.3753,69.3451],5);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+    let routeLayer = null;
+
+    async function calculate() {
+      const mode = document.getElementById("mode").value;
+      if (!fromCoords || !toCoords) { alert("Please select valid addresses from suggestions."); return; }
+
+      const url = `https://router.project-osrm.org/route/v1/${mode}/${fromCoords.lng},${fromCoords.lat};${toCoords.lng},${toCoords.lat}?overview=full&geometries=geojson`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (!data.routes || data.routes.length === 0) { alert("No route found."); return; }
+
+      const route = data.routes[0];
+      const distanceKm = (route.distance/1000).toFixed(2);
+      const durationMin = (route.duration/60).toFixed(1);
+
+      document.getElementById("result").innerText = `Distance: ${distanceKm} km | Time: ${durationMin} min`;
+
+      if (routeLayer) { map.removeLayer(routeLayer); }
+      routeLayer = L.geoJSON(route.geometry).addTo(map);
+      map.fitBounds(routeLayer.getBounds());
+    }
+
+    document.getElementById("calc").onclick = calculate;
+  </script>
+</body>
+</html>
